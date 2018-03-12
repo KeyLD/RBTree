@@ -5,38 +5,38 @@
     > Created Time: Tue 06 Mar 2018 05:15:09 PM CST
 *********************************************************************** */
 
-#include "rbtree.h"
+#include "kmap.h"
+#include <iostream>
 
-using namespace std; 
+using namespace std;
 
 int main()
 {
-    RBTree<int,int> rbtree;
-    rbtree.insert(123,1);
-    rbtree.insert(52,2);
-    rbtree.insert(324,3);
-    rbtree.insert(436,4);
-    rbtree.insert(413,5);
-    rbtree.insert(525,6);
-    rbtree.insert(235,7);
-    rbtree.insert(63,8);
-    rbtree.insert(346,9);
-    rbtree.insert(521,10);
-    rbtree.insert(675,11);
-    rbtree.insert(240,12);
+    kmap<int,int> test_map;
+    test_map.insert(makePair(123,1));
+    test_map.insert(makePair(52,2));
+    test_map.insert(makePair(324,3));
+    test_map.insert(makePair(436,4));
+    test_map.insert(makePair(413,5));
+    test_map.insert(makePair(525,6));
+    test_map.insert(makePair(235,7));
+    test_map.insert(makePair(63,8));
+    test_map.insert(makePair(346,9));
+    test_map.insert(makePair(521,10));
+    test_map.insert(makePair(675,11));
+    test_map.insert(makePair(240,12));
 
-    rbtree.erase(675);
-    rbtree.erase(413);
-
-    RBTree<int,int>::iterator it = rbtree.begin();
-    while(it != rbtree.end()) {
-        printf("%d %d\n",it->key,it->value);
-        it = rbtree.nextPointer(it);
+    test_map.erase(675);
+    test_map.erase(413);
+    
+    kmap<int,int>::iterator it = test_map.begin();
+    while(it != test_map.end()) {
+        printf("%d %d\n",it->first,it->second);
+        it++;
     }
-    printf("%d %d\n",it->key,it->value);
 
-    puts("bfsPrint here:");
-    rbtree.bfsPrint();
+    //puts("bfsPrint here:");
+    //test_map.bfsPrint();
     return 0;
 }
 

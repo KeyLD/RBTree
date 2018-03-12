@@ -1,0 +1,38 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/key/Git/RBTree/kmap.h
+pair.h
+/home/key/Git/RBTree/pair.h
+rbtree.h
+/home/key/Git/RBTree/rbtree.h
+
+/home/key/Git/RBTree/pair.h
+
+/home/key/Git/RBTree/rbtree.h
+pair.h
+/home/key/Git/RBTree/pair.h
+rbtree_iterator.h
+/home/key/Git/RBTree/rbtree_iterator.h
+cassert
+-
+queue
+-
+
+/home/key/Git/RBTree/rbtree_iterator.h
+rbtree_node.h
+/home/key/Git/RBTree/rbtree_node.h
+
+/home/key/Git/RBTree/rbtree_node.h
+
+/home/key/Git/RBTree/test.cpp
+kmap.h
+/home/key/Git/RBTree/kmap.h
+iostream
+-
+

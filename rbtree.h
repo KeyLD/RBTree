@@ -7,476 +7,483 @@
 #ifndef _RBTREE_H
 #define _RBTREE_H
 
-#include <assert.h>
-#include <iostream>
+#define TEMPLATE template <typename K, typename V, class KeyOfValue, class Compare>
+
+#include "pair.h"
+#include "rbtree_iterator.h"
+#include <cassert>
 #include <queue>
 
-enum RBTColor {
-    red,
-    black
-};
-template <typename K, typename V>
-class RBTreeNode;
-
-template <typename K, typename V>
+TEMPLATE
 class RBTree {
+public:
+    typedef K key_type;
+    typedef V value_type;
+    typedef V* pointer;
+    typedef const V* const_pointer;
+    typedef V& reference;
+    typedef const V& const_reference;
+    typedef RBTreeNode<V>* link_type;
+    typedef size_t size_type;
+    typedef ptrdiff_t difference_type;
+    typedef RBTreeIterator<value_type, reference, pointer> iterator;
+    typedef const RBTreeIterator<value_type, reference, pointer> const_iterator;
+
+protected:
+    typedef NodeBase* base_ptr;
+    typedef RBTColor color_type;
+
+    size_type node_count;
+    link_type header;
+    Compare key_compare;
+
+    link_type& root() const { return (link_type&)header->parent; }
+    link_type& leftMost() const { return (link_type&)header->left; }
+    link_type& rightMost() const { return (link_type&)header->right; }
+
+    static link_type& left(link_type cNode) { return (link_type&)(cNode->left); }
+    static link_type& right(link_type cNode) { return (link_type&)(cNode->right); }
+    static link_type& parent(link_type cNode) { return (link_type&)(cNode->parent); }
+    static reference value(link_type cNode) { return cNode->value; }
+    static link_type& key(link_type cNode) { return KeyOfValue()(value(cNode)); }
+    static color_type& color(link_type cNode) { return (color_type&)(cNode->color); }
+
+    static link_type& left(base_ptr cNode) { return (link_type&)(cNode->left); }
+    static link_type& right(base_ptr cNode) { return (link_type&)(cNode->right); }
+    static link_type& parent(base_ptr cNode) { return (link_type&)(cNode->parent); }
+    static reference value(base_ptr cNode) { return ((link_type)cNode)->value; }
+    static link_type& key(base_ptr cNode) { return KeyOfValue()(value(link_type(cNode))); }
+    static color_type& color(base_ptr cNode) { return (color_type&)(link_type(cNode)->color); }
+
+    static link_type minimum(link_type cNode) { return (link_type)NodeBase::minimum(cNode); }
+    static link_type maximum(link_type cNode) { return (link_type)NodeBase::maximum(cNode); }
+
 private:
-    typedef RBTreeNode<K, V>* RBTNodePointer;
-    typedef RBTreeNode<K, V> RBTNode;
+    bool insertFixUp(link_type);
+    void eraseFixUp_left(link_type, link_type, link_type);
+    void eraseFixUp_right(link_type, link_type, link_type);
+    link_type leftRotate(link_type);
+    link_type rightRotate(link_type); //尝试static 失败
+    void moveNode(link_type, link_type);
 
-    RBTNodePointer RBTree_root;
-    bool rbt_change;
-    RBTNodePointer begin_pointer, end_pointer;
+    link_type findPrecursor(link_type);
+    link_type findSuccessor(link_type);
 
-    bool insertFixUp(RBTNodePointer);
-    void eraseFixUp_left(RBTNodePointer, RBTNodePointer, RBTNodePointer);
-    void eraseFixUp_right(RBTNodePointer, RBTNodePointer, RBTNodePointer);
-    RBTNodePointer leftRotate(RBTNodePointer);
-    RBTNodePointer rightRotate(RBTNodePointer);
-    void moveNode(RBTNodePointer, RBTNodePointer);
+    iterator __insert(base_ptr, base_ptr, const value_type&);
+    bool insertNode(const link_type);
 
-    void dyeNodeRed(RBTNodePointer node) { node->color = red; } // inline
-    void dyeNodeBlack(RBTNodePointer node) { node->color = black; }
-    void dyeNode(RBTNodePointer node, RBTNodePointer color_src) { node->color = color_src->color; }
-    bool isRedNode(RBTNodePointer node) { return node and node->color == red; }
-    bool isBlackNode(RBTNodePointer node) { return !node or node->color == black; }
-
-    RBTNodePointer findPrecursor(RBTNodePointer);
-    RBTNodePointer findSuccessor(RBTNodePointer);
-    RBTNodePointer findByKey(K);
-
-    bool insertNode(const RBTNodePointer);
-
-    void clear(RBTNodePointer);
-
-    void swap(RBTColor& ac, RBTColor& bc) { std::swap(ac, bc); }
+    void clear(link_type);
+    void swap(color_type& ac,color_type& bc)
+    {
+        color_type tmp = ac;
+        ac = bc;
+        bc = tmp;
+    }
+    void swap(RBTree& s)
+    {
+        RBTree tmp = *this;
+        *this = s;
+        s = tmp;
+    }
 
 public:
-    typedef const RBTreeNode<K, V>* iterator;
-
-    RBTree()
-        : rbt_change(false)
+    explicit RBTree(const Compare& compare = Compare())
+        : node_count(0)
+        , key_compare(compare)
     {
-        begin_pointer = end_pointer = RBTree_root = nullptr;
+        header = new RBTreeNode<V>;
+        root() = nullptr;
+        leftMost() = header;
+        rightMost() = header;
     }
     ~RBTree()
     {
-        if (RBTree_root != nullptr)
-            clear(RBTree_root);
+        if (root() != nullptr)
+            clear(root());
     }
 
-    V find(K);
-    void insert(K, V);
+    iterator find(K);
+    pair<iterator, bool> insert(const value_type&); //修改返回值
     void erase(K);
 
     void bfsPrint();
 
-    iterator begin()
-    {
-        if (rbt_change or begin_pointer == nullptr) {
-            begin_pointer = RBTree_root;
-            if (!begin_pointer)
-                return nullptr;
-            while (begin_pointer->left_son != nullptr)
-                begin_pointer = begin_pointer->left_son;
-        }
-        return begin_pointer;
-    }
-    iterator end()
-    {
-        if (rbt_change or end_pointer == nullptr) {
-            end_pointer = RBTree_root;
-            if (!end_pointer)
-                return nullptr;
-            while (end_pointer->right_son)
-                end_pointer = end_pointer->right_son;
-        }
-        return end_pointer;
-    }
-    iterator nextPointer(iterator cur)
-    {
-        if (cur->right_son) {
-            cur = cur->right_son;
-            while (cur->left_son)
-                cur = cur->left_son;
-            return cur;
-        } else {
-            RBTNodePointer parent = cur->parent;
-            while (cur == parent->right_son) {
-                cur = parent;
-                parent = cur->parent;
-            }
-            return parent;
-        }
-    }
+    iterator begin() { return leftMost(); }
+    iterator end() { return rightMost(); }
+    bool empty() const { return node_count == 0; }
+    size_type size() const { return node_count; }
+    size_type count(const key_type& _key) { return find(_key) == end() ? 0 : 1; }
+    void clear() { clear(root()); }
 };
 
-template <typename K, typename V>
-class RBTreeNode {
-public:
-    K key;
-    V value;
-
-    RBTreeNode(K _key = 0, V _value = 0)
-        : key(_key)
-        , value(_value)
-        , color(red)
-    {
-        left_son = right_son = parent = nullptr;
-    }
-    ~RBTreeNode() {}
-
-    friend class RBTree<K, V>;
-
-private:
-    RBTreeNode* left_son;
-    RBTreeNode* right_son;
-    RBTreeNode* parent;
-    enum RBTColor color;
-};
-
-
-
-
-template <typename K, typename V>
-RBTreeNode<K, V>* RBTree<K, V>::leftRotate(RBTNodePointer root)
+TEMPLATE
+RBTreeNode<V>* RBTree<K, V, KeyOfValue, Compare>::leftRotate(link_type root)
 {
     // 左旋必须确保 节点 与 节点的右孩子 不为空
-    if (!root || !root->right_son) {
+    if (!root || !right(root)) {
         // error msg
         return nullptr;
     }
 
-    RBTNodePointer super_root;
-    RBTNodePointer right_son = root->right_son;
-    RBTNodePointer right_son_left = right_son->left_son;
+    link_type super_root;
+    link_type right = this->right(root);
+    link_type right_left = left(right);
 
-    if (root == RBTree_root) {
-        super_root = RBTree_root;
-        RBTree_root = root->right_son;
+    if (root == this->root()) {
+        super_root = this->root();
+        this->root() = this->right(root);
     } else
-        super_root = root->parent;
+        super_root = parent(root);
 
-    if (super_root->left_son == root)
-        super_root->left_son = right_son;
-    else if (super_root->right_son == root)
-        super_root->right_son = right_son;
-    right_son->parent = super_root;
+    if (left(super_root) == root)
+        left(super_root) = right;
+    else if (this->right(super_root) == root)
+        this->right(super_root) = right;
+    parent(root) = super_root;
 
-    right_son->left_son = root;
-    root->parent = right_son;
+    left(right) = root;
+    parent(root) = right;
 
-    root->right_son = right_son_left;
-    if (right_son_left) //函数只保证旋转的两个节点不是nil
-        right_son_left->parent = root;
+    this->right(root) = right_left;
+    if (right_left) //函数只保证旋转的两个节点不是nil
+        parent(right_left) = root;
 
-    return right_son;
+    return right;
 }
 
-template <typename K, typename V>
-RBTreeNode<K, V>* RBTree<K, V>::rightRotate(RBTNodePointer root)
+TEMPLATE
+RBTreeNode<V>* RBTree<K, V, KeyOfValue, Compare>::rightRotate(link_type root)
 {
     // 右旋必须确保 节点 和 节点的左孩子 不为空
-    if (!root || !root->left_son) {
+    if (!root || left(root)) {
         // error msg
         return nullptr;
     }
 
-    RBTNodePointer super_root;
-    RBTNodePointer left_son = root->left_son;
-    RBTNodePointer left_son_right = left_son->right_son;
+    link_type super_root;
+    link_type left = this->left(root);
+    link_type left_right = right(left);
 
-    if (root == RBTree_root) {
-        super_root = RBTree_root;
-        RBTree_root = root->left_son;
+    if (root == this->root()) {
+        super_root = this->root();
+        this->root() = this->left(root);
     } else
-        super_root = root->parent;
+        super_root = parent(root);
 
-    if (super_root->left_son == root)
-        super_root->left_son = left_son;
-    else if (super_root->right_son == root)
-        super_root->right_son = left_son;
-    left_son->parent = super_root;
+    if (this->left(super_root) == root)
+        this->left(super_root) = left;
+    else if (right(super_root) == root)
+        right(super_root) = left;
+    parent(left) = super_root;
 
-    left_son->right_son = root;
-    root->parent = left_son;
+    right(left) = root;
+    parent(root) = left;
 
-    root->left_son = left_son_right;
-    if (left_son_right) // 函数只保证旋转的两个节点不是nil
-        left_son_right->parent = root;
+    this->left(root) = left_right;
+    if (left_right) // 函数只保证旋转的两个节点不是nil
+        parent(left_right) = root;
 
-    return left_son;
+    return left;
 }
 
-template <typename K, typename V>
-RBTreeNode<K, V>* RBTree<K, V>::findByKey(K find_key)
+TEMPLATE
+RBTreeIterator<V,V&,V*> RBTree<K, V, KeyOfValue, Compare>::find(K find_key)
 {
-    RBTNodePointer cNode = RBTree_root;
-    while (cNode != nullptr) {
-        if (find_key < cNode->key)
-            cNode = cNode->left_son;
-        else if (find_key > cNode->key)
-            cNode = cNode->right_son;
-        else
-            return cNode;
+    link_type y = header;
+    link_type x = root();
+    while (x != nullptr) {
+        if(!key_compare(key(x),find_key)) { //compare不含等于号 若两值相等只能是两个compare都是false 妙！
+            y = x,x=left(x);
+        } else {
+            x = right(x);
+        }
     }
-    return nullptr;
+    iterator it = iterator(y);
+    return (it == end()) or key_compare(find_key,key(it.node)) ? end() : it;
 }
 
-template <typename K, typename V>
-V RBTree<K, V>::find(K find_key)
+TEMPLATE
+void RBTree<K, V, KeyOfValue, Compare>::clear(link_type root)
 {
-    RBTNodePointer cNode = findByKey(find_key);
-    assert(cNode != nullptr);
-    return cNode->value;
-}
-
-template <typename K, typename V>
-void RBTree<K, V>::clear(RBTNodePointer root)
-{
-    if (root->left_son)
-        clear(root->left_son);
-    if (root->right_son)
-        clear(root->right_son);
+    if (root->left)
+        clear(left(root));
+    if (root->right)
+        clear(right(root));
     delete root;
 }
 
-template <typename K, typename V>
-void RBTree<K, V>::moveNode(RBTNodePointer replace, RBTNodePointer deleted)
+TEMPLATE
+void RBTree<K, V, KeyOfValue, Compare>::moveNode(link_type replace, link_type deleted)
 {
-    RBTNodePointer deleted_parent = deleted->parent;
+    link_type deleted_parent = parent(deleted);
 
-    if (deleted_parent->left_son == deleted)
-        deleted_parent->left_son = replace;
+    if (deleted_parent->left == deleted)
+        deleted_parent->left = replace;
     else
-        deleted_parent->right_son = replace;
+        deleted_parent->right = replace;
     if (replace != nullptr)
         replace->parent = deleted_parent;
     delete deleted;
 }
 
-template <typename K, typename V>
-inline RBTreeNode<K, V>* RBTree<K, V>::findSuccessor(RBTNodePointer root)
+TEMPLATE
+inline RBTreeNode<V>* RBTree<K, V, KeyOfValue, Compare>::findSuccessor(link_type root)
 {
-    RBTNodePointer cNode = root->right_son;
-    while (cNode->left_son != nullptr)
-        cNode = cNode->left_son;
+    link_type cNode = right(root);
+    while (cNode->left != nullptr)
+        cNode = left(cNode);
     return cNode;
 }
 
-template <typename K, typename V>
-inline RBTreeNode<K, V>* RBTree<K, V>::findPrecursor(RBTNodePointer root)
+TEMPLATE
+inline RBTreeNode<V>* RBTree<K, V, KeyOfValue, Compare>::findPrecursor(link_type root)
 {
-    RBTNodePointer cNode = root->left_son;
-    while (cNode->right_son != nullptr)
-        cNode = cNode->right_son;
+    link_type cNode = left(root);
+    while (cNode->right != nullptr)
+        cNode = right(root);
     return cNode;
 }
 
-template <typename K, typename V>
-void RBTree<K, V>::insert(K _key, V _value)
+TEMPLATE
+pair<RBTreeIterator<V, V&, V*>, bool> RBTree<K, V, KeyOfValue, Compare>::insert(const value_type& value)
 {
-    RBTNodePointer new_node = new RBTreeNode<K, V>(_key, _value);
-    if (RBTree_root == nullptr) {
-        RBTree_root = new_node;
-        dyeNodeBlack(RBTree_root);
-    } else {
-        if (insertNode(new_node))
-            insertFixUp(new_node);
+    link_type parent = header;
+    link_type cNode = root();
+    key_type insert_key = KeyOfValue()(value);
+    bool comp = true;
+    while (cNode != nullptr) {
+        parent = cNode;
+        comp = key_compare(insert_key, key(cNode)); // insert_key < key(cNode) ?
+        cNode = comp ? left(cNode) : right(cNode);  // 不是有环么 ?
+    }
+    iterator it = iterator(parent);
+    if (comp) {
+        if (it == begin())
+            return pair<iterator, bool>(__insert(cNode, parent, value), true);
         else
-            std::perror("insert error"); //修改
+            --it;
+    }
+    if (key_compare(key(it.node), insert_key))
+        return pair<iterator, bool>(__insert(cNode, parent, value), true);
+    return pair<iterator, bool>(it, false);
+    //if (root() == nullptr) {
+    //root() = new_node;
+    //DYE_BLACK(root());
+    //} else {
+    //if (insertNode(new_node))
+    //insertFixUp(new_node);
+    //else
+    //std::perror("insert error"); //修改
+    //}
+}
+
+TEMPLATE
+typename RBTree<K, V, KeyOfValue, Compare>::iterator
+RBTree<K, V, KeyOfValue, Compare>::
+    __insert(base_ptr _x, base_ptr _y, const value_type& value)
+{
+    auto cNode = (link_type)_x;
+    auto y = (link_type)_y;
+    link_type new_node;
+
+    key_type insert_key = KeyOfValue()(value);
+
+    if (y == header or cNode != nullptr or key_compare(insert_key, key(y))) {
+        new_node = new RBTreeNode<value_type>;
+        left(y) = new_node;
+
     }
 }
 
-template <typename K, typename V>
-bool RBTree<K, V>::insertNode(const RBTNodePointer new_node)
+TEMPLATE
+bool RBTree<K, V, KeyOfValue, Compare>::insertNode(const link_type new_node)
 {
-    K insert_key = new_node->key;
-    RBTNodePointer cNode = RBTree_root;
+    K insert_key = KeyOfValue()(new_node);
+    link_type cNode = root();
     while (cNode != nullptr) {
-        if (insert_key < cNode->key) {
-            if (cNode->left_son == nullptr) {
-                cNode->left_son = new_node;
+        if (insert_key < key(cNode)) {
+            if (cNode->left == nullptr) {
+                cNode->left = new_node;
                 new_node->parent = cNode;
                 return true;
             } else
-                cNode = cNode->left_son;
-        } else if (insert_key > cNode->key) {
-            if (cNode->right_son == nullptr) {
-                cNode->right_son = new_node;
+                cNode = left(cNode);
+        } else if (insert_key > key(cNode)) {
+            if (cNode->right == nullptr) {
+                cNode->right = new_node;
                 new_node->parent = cNode;
                 return true;
             } else
-                cNode = cNode->right_son;
+                cNode = right(cNode);
         }
     }
     return false;
 }
 
-template <typename K, typename V>
-bool RBTree<K, V>::insertFixUp(RBTNodePointer root)
+TEMPLATE
+bool RBTree<K, V, KeyOfValue, Compare>::insertFixUp(link_type root)
 {
-    RBTNodePointer parent = root->parent;
-    while (parent != nullptr && isRedNode(parent)) { //只要父节点的颜色位红色，就保证有祖父节点，因为性质1
-        RBTNodePointer grandparent = parent->parent;
-        if (grandparent->left_son == parent) {
-            if (grandparent->right_son && isRedNode(grandparent->right_son)) {
-                dyeNodeBlack(parent);
-                dyeNodeBlack(grandparent->right_son);
-                if (grandparent != RBTree_root)
-                    dyeNodeRed(grandparent);
+    link_type parent = this->parent(root);
+    while (parent != nullptr && IS_RED(parent)) { //只要父节点的颜色位红色，就保证有祖父节点，因为性质1
+        link_type grandparent = this->parent(parent);
+        if (grandparent->left == parent) {
+            if (grandparent->right && IS_RED(grandparent->right)) {
+                DYE_BLACK(parent);
+                DYE_BLACK(grandparent->right);
+                if (grandparent != this->root())
+                    DYE_RED(grandparent);
                 root = grandparent;
-                parent = root->parent;
+                parent = this->parent(root);
                 continue;
-            } else if (parent->right_son == root)
+            } else if (parent->right == root)
                 leftRotate(parent);
             grandparent = rightRotate(grandparent);
             assert(grandparent != nullptr);
-            dyeNodeBlack(grandparent);
-            dyeNodeRed(grandparent->left_son);
-            dyeNodeRed(grandparent->right_son);
+            DYE_BLACK(grandparent);
+            DYE_RED(grandparent->left);
+            DYE_RED(grandparent->right);
             break;
         } else {
-            if (grandparent->left_son && isRedNode(grandparent->left_son)) {
-                dyeNodeBlack(parent);
-                dyeNodeBlack(grandparent->left_son);
-                if (grandparent != RBTree_root)
-                    dyeNodeRed(grandparent);
+            if (grandparent->left && IS_RED(grandparent->left)) {
+                DYE_BLACK(parent);
+                DYE_BLACK(grandparent->left);
+                if (grandparent != this->root())
+                    DYE_RED(grandparent);
                 root = grandparent;
-                parent = root->parent;
+                parent = this->parent(root);
                 continue;
-            } else if (parent->left_son == root)
+            } else if (parent->left == root)
                 rightRotate(parent);
             grandparent = leftRotate(grandparent);
-            dyeNodeBlack(grandparent);
-            dyeNodeRed(grandparent->left_son);
-            dyeNodeRed(grandparent->right_son);
+            DYE_BLACK(grandparent);
+            DYE_RED(grandparent->left);
+            DYE_RED(grandparent->right);
             break;
         }
     }
     return true;
 }
 
-template <typename K, typename V>
-void RBTree<K, V>::erase(K erase_key)
+TEMPLATE
+void RBTree<K, V, KeyOfValue, Compare>::erase(K erase_key)
 {
-    RBTNodePointer deleted = findByKey(erase_key);
+    auto deleted = (link_type)find(erase_key).node;
     if (deleted != nullptr) {
-        if (deleted->right_son) {
-            RBTNodePointer replace = findSuccessor(deleted);
+        if (deleted->right) {
+            link_type replace = findSuccessor(deleted);
 
-            deleted->value = replace->value;
-            deleted->key = replace->key;
+            value(deleted) = value(replace);
+            key(deleted) = key(replace);
 
-            RBTNodePointer replace_right = replace->right_son, replace_parent = replace->parent;
-            RBTNodePointer replace_brother = replace_parent->left_son == replace ? replace_parent->right_son : replace_parent->left_son;
-            bool is_replace_black = isBlackNode(replace);
+            link_type replace_right = right(replace), replace_parent = parent(replace);
+            link_type replace_brother = left(replace_parent) == replace ? right(replace_parent) : left(replace_parent);
+            bool is_replace_black = IS_BLACK(replace);
             moveNode(replace_right, replace);
 
             if (is_replace_black)
                 eraseFixUp_right(replace_right, replace_parent, replace_brother);
-        } else if (deleted->left_son) {
-            RBTNodePointer replace = findPrecursor(deleted);
+        } else if (deleted->left) {
+            link_type replace = findPrecursor(deleted);
 
-            deleted->value = replace->value;
-            deleted->key = replace->key;
+            value(deleted) = value(replace);
+            key(deleted) = key(replace);
 
-            RBTNodePointer replace_left = replace->left_son, replace_parent = replace->parent;
-            RBTNodePointer replace_brother = replace_parent->left_son == replace ? replace_parent->right_son : replace_parent->left_son;
-            bool is_replace_black = isBlackNode(replace);
+            link_type replace_left = left(replace), replace_parent = parent(replace);
+            link_type replace_brother = left(replace_parent) == replace ? right(replace_parent) : left(replace_parent);
+            bool is_replace_black = IS_BLACK(replace);
             moveNode(replace_left, replace);
 
             if (is_replace_black)
                 eraseFixUp_left(replace_left, replace_parent, replace_brother);
         } else {
-            moveNode(deleted->right_son, deleted);
+            moveNode(right(deleted), deleted);
         }
     }
 }
 
-template <typename K, typename V>
-void RBTree<K, V>::eraseFixUp_right(RBTNodePointer deleted, RBTNodePointer parent, RBTNodePointer brother)
+TEMPLATE
+void RBTree<K, V, KeyOfValue, Compare>::eraseFixUp_right(link_type deleted, link_type parent, link_type brother)
 {
-    if (isRedNode(deleted)) { //ok
-        dyeNodeBlack(deleted);
-    } else if (isRedNode(brother)) {
+    if (IS_RED(deleted)) { //ok
+        DYE_BLACK(deleted);
+    } else if (IS_RED(brother)) {
         parent = leftRotate(parent);
-        swap(parent->color, parent->left_son->color);
-    } else if (isRedNode(brother->left_son)) { //ok
-        RBTNodePointer brother_left = brother->left_son;
+        swap(parent->color, parent->left->color);
+    } else if (IS_RED(brother->left)) { //ok
+        link_type brother_left = left(brother);
         rightRotate(brother);
-        dyeNode(brother_left, parent);
-        dyeNodeBlack(parent);
+        COPY_COLOR(brother_left, parent);
+        DYE_BLACK(parent);
         leftRotate(parent);
-    } else if (isRedNode(brother->right_son)) { //ok
-        dyeNode(brother, parent);
-        dyeNodeBlack(parent);
-        dyeNodeBlack(brother->right_son);
+    } else if (IS_RED(brother->right)) { //ok
+        COPY_COLOR(brother, parent);
+        DYE_BLACK(parent);
+        DYE_BLACK(brother->right);
         leftRotate(parent);
-    } else if (isRedNode(parent)) { //ok
-        dyeNodeRed(brother);
-        dyeNodeBlack(parent);
+    } else if (IS_RED(parent)) { //ok
+        DYE_RED(brother);
+        DYE_BLACK(parent);
     } else { //ok
-        dyeNodeRed(brother);
+        DYE_RED(brother);
         deleted = parent;
-        parent = deleted->parent;
+        parent = this->parent(deleted);
         if (parent == nullptr)
             return;
-        else if (parent->left_son == deleted)
-            eraseFixUp_right(deleted, parent, parent->right_son);
+        else if (parent->left == deleted)
+            eraseFixUp_right(deleted, parent, right(parent));
         else
-            eraseFixUp_left(deleted, parent, parent->left_son);
+            eraseFixUp_left(deleted, parent, left(parent));
     }
 }
 
-template <typename K, typename V>
-void RBTree<K, V>::eraseFixUp_left(RBTNodePointer deleted, RBTNodePointer parent, RBTNodePointer brother)
+TEMPLATE
+void RBTree<K, V, KeyOfValue, Compare>::eraseFixUp_left(link_type deleted, link_type parent, link_type brother)
 {
-    if (isRedNode(deleted)) { //ok
-        dyeNodeBlack(deleted);
-    } else if (isRedNode(brother)) {
+    if (IS_RED(deleted)) { //ok
+        DYE_BLACK(deleted);
+    } else if (IS_RED(brother)) {
         parent = rightRotate(parent);
-        swap(parent->color, parent->right_son->color);
-    } else if (isRedNode(brother->right_son)) { //ok
-        RBTNodePointer brother_right = brother->right_son;
+        swap(parent->color, parent->right->color);
+    } else if (IS_RED(brother->right)) { //ok
+        link_type brother_right = right(brother);
         leftRotate(brother);
-        dyeNode(brother_right, parent);
-        dyeNodeBlack(parent);
+        COPY_COLOR(brother_right, parent);
+        DYE_BLACK(parent);
         rightRotate(parent);
-    } else if (isRedNode(brother->left_son)) { //ok
-        dyeNode(brother, parent);
-        dyeNodeBlack(parent);
-        dyeNodeBlack(brother->left_son);
+    } else if (IS_RED(brother->left)) { //ok
+        COPY_COLOR(brother, parent);
+        DYE_BLACK(parent);
+        DYE_BLACK(brother->left);
         rightRotate(parent);
-    } else if (isRedNode(parent)) { //ok
-        dyeNodeRed(brother);
-        dyeNodeBlack(parent);
+    } else if (IS_RED(parent)) { //ok
+        DYE_RED(brother);
+        DYE_BLACK(parent);
     } else { //ok
-        dyeNodeRed(brother);
+        DYE_RED(brother);
         deleted = parent;
-        parent = deleted->parent;
+        parent = this->parent(deleted);
         if (parent == nullptr)
             return;
-        else if (parent->left_son == deleted)
-            eraseFixUp_right(deleted, parent, parent->right_son);
+        else if (parent->left == deleted)
+            eraseFixUp_right(deleted, parent, right(parent));
         else
-            eraseFixUp_left(deleted, parent, parent->left_son);
+            eraseFixUp_left(deleted, parent, left(parent));
     }
 }
 
-template <typename K, typename V>
-void RBTree<K, V>::bfsPrint()
+TEMPLATE
+void RBTree<K, V, KeyOfValue, Compare>::bfsPrint()
 {
-    std::queue<RBTNodePointer> que;
-    que.push(RBTree_root);
+    std::queue<link_type> que;
+    que.push(root());
     while (!que.empty()) {
-        RBTreeNode<int, int>* cNode = que.front();
+        RBTreeNode<int>* cNode = que.front();
         que.pop();
-        std::cout << cNode->key << "  " << (cNode->color == black ? "black" : "red") << std::endl;
-        if (cNode->left_son != nullptr)
-            que.push(cNode->left_son);
-        if (cNode->right_son != nullptr)
-            que.push(cNode->right_son);
+        //std::cout << cNode->key << "  " << (cNode->color == black ? "black" : "red") << std::endl;
+        if (cNode->left != nullptr)
+            que.push(left(cNode));
+        if (cNode->right != nullptr)
+            que.push(right(cNode));
     }
 }
 
